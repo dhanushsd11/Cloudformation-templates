@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  UserPoolName:
+    Type: String
+    Default: MyUserPool
+    Description: Enter the name for your Cognito User Pool
+  MinimumPasswordLength:
+    Type: Number
+    Default: 8
+    Description: Enter the minimum required length for passwords
+  AdvancedSecurityMode:
+    Type: String
+    Default: 'ENFORCED'
+    Description: Enter the advanced security mode for your User Pool
+Resources:
+  UserPool:
+    Type: 'AWS::Cognito::UserPool'
+    Properties:
+      UserPoolName: !Ref UserPoolName
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: !Ref MinimumPasswordLength
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+      UsernameConfiguration:
+        CaseSensitive: false
+      UserPoolAddOns:
+        AdvancedSecurityMode: !Ref AdvancedSecurityMode

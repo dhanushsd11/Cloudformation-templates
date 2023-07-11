@@ -1,0 +1,58 @@
+Parameters:
+  AZMode:
+    Description: The availability zone mode for the cache cluster
+    Type: String
+    AllowedValues: [single-az, cross-az]
+    Default: single-az
+
+  CacheNodeType:
+    Description: The cache node type for the cache cluster
+    Type: String
+
+  CacheParameterGroupName:
+    Description: The parameter group name for the cache cluster
+    Type: String
+
+  CacheSecurityGroupNames:
+    Description: The security group names for the cache cluster
+    Type: CommaDelimitedList
+
+  ClusterName:
+    Description: The name of the cache cluster
+    Type: String
+
+  Engine:
+    Description: The cache engine type
+    Type: String
+
+  EngineVersion:
+    Description: The cache engine version
+    Type: String
+
+  NumCacheNodes:
+    Description: The number of cache nodes
+    Type: Number
+    Default: 1
+
+  TransitEncryptionEnabled:
+    Description: Whether to enable transit encryption
+    Type: String
+    AllowedValues: [true, false]
+    Default: true
+
+  
+
+Resources:
+  MyCacheCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      AZMode: !Ref AZMode
+      CacheNodeType: !Ref CacheNodeType
+      CacheParameterGroupName: !Ref CacheParameterGroupName
+      CacheSecurityGroupNames: !Ref CacheSecurityGroupNames
+      ClusterName: !Ref ClusterName
+      Engine: !Ref Engine
+      EngineVersion: !Ref EngineVersion
+      NumCacheNodes: !Ref NumCacheNodes
+      TransitEncryptionEnabled: !Ref TransitEncryptionEnabled
+      

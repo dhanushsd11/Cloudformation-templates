@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  OpenSearchCluster:
+    Type: 'AWS::OpenSearchService::Domain'
+    Properties:
+      ClusterConfig: 
+        InstanceCount: 2
+        InstanceType: r5.large.search
+        DedicatedMasterEnabled: true  
+        DedicatedMasterCount: 2
+        DedicatedMasterType: r5.xlarge.search
+      EBSOptions:  
+        EBSEnabled: true
+        VolumeType: gp3
+        VolumeSize: 10 
+

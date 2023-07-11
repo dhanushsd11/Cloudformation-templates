@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  InstanceCount:
+    Type: Number
+    Default: 2
+    Description: Enter the number of instances for the OpenSearch cluster
+  InstanceType:
+    Type: String
+    Default: r5.large.search
+    Description: Enter the instance type for the OpenSearch cluster
+  DedicatedMasterEnabled:
+    Type: String
+    Default: "true"
+    Description: Specify if dedicated master nodes should be enabled (true/false)
+  DedicatedMasterCount:
+    Type: Number
+    Default: 2
+    Description: Enter the number of dedicated master nodes for the OpenSearch cluster
+  DedicatedMasterType:
+    Type: String
+    Default: r5.xlarge.search
+    Description: Enter the instance type for the dedicated master nodes
+  EBSEnabled:
+    Type: String
+    Default: "true"
+    Description: Specify if EBS volumes should be enabled (true/false)
+  VolumeType:
+    Type: String
+    Default: gp3
+    Description: Enter the EBS volume type for the OpenSearch cluster
+  VolumeSize:
+    Type: Number
+    Default: 10
+    Description: Enter the size (in GB) of the EBS volumes for the OpenSearch cluster
+
+Resources:
+  OpenSearchCluster:
+    Type: 'AWS::OpenSearchService::Domain'
+    Properties:
+      ClusterConfig: 
+        InstanceCount: !Ref InstanceCount
+        InstanceType: !Ref InstanceType
+        DedicatedMasterEnabled: !Ref DedicatedMasterEnabled
+        DedicatedMasterCount: !Ref DedicatedMasterCount
+        DedicatedMasterType: !Ref DedicatedMasterType
+      EBSOptions:  
+        EBSEnabled: !Ref EBSEnabled
+        VolumeType: !Ref VolumeType
+        VolumeSize: !Ref VolumeSize
