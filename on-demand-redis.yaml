@@ -1,0 +1,334 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for non-prod environment.
+
+Parameters:
+  ## Use Exisitng SSM Parameters
+  Environment:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /account/environment
+  ## Use Exisitng VPC Parameters
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: ID of the existing VPC
+  DatabasePrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Provide the subnets for Aurora db subnet group
+  RedisNodeType:
+    Type: String
+    Description: Select the sizing for Redis instance
+    AllowedValues:
+    - "cache.t4g.micro"
+    - "cache.t4g.small"
+    - "cache.t4g.medium"
+    - "cache.t3.micro"
+    - "cache.t3.small"
+    - "cache.t3.medium"
+    - "cache.t2.micro"
+    - "cache.t2.small"
+    - "cache.t2.medium"
+    - "cache.m6g.large"
+    - "cache.m6g.xlarge"
+    - "cache.m6g.2xlarge"
+    - "cache.m6g.4xlarge"
+
+  ClusterSecurityGroup:
+    Type: String
+    Description: Provide the security group id for EKS Cluster Security group
+  AuroraSecurityGroup:
+    Type: String
+    Description: Provide the security group id for RDS Cluster Security group
+  WarningThreshold:
+    Type: String
+    Description: Percentage value for warning alarm
+    Default: 75
+  CriticalThreshold:
+    Type: String
+    Description: Percentage value for critical alarm
+
+  RedisKMSKeyAlias:
+    Type: String
+    Description: Alias for Redis KMS Key
+
+  SNSKMSKeyID:
+    Type: String
+    Description: Give the key id for SNS topic encryption
+  SNSEmailID:
+    Type: String
+    Description: Give the email for cloudwatch alerts
+
+  RedisFreeableMemoryWarning:
+    Type: String
+    Description: Threshold value for Redis freeable memory warning, (default calculated for t4g.micro)
+    Default: 134217728
+  RedisFreeableMemoryCritical:
+    Type: String
+    Description: Threshold value for Redis freeable memory critical, (default calculated for t4g.micro)
+    Default: 53687091
+  NumNodeGroups:
+    Type: String
+    Description: Mention the number of shards to be updated.
+
+  # #############################################################################################################
+Resources:
+  ########################################################################################################
+  RedisCacheSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      CacheSubnetGroupName: !Sub ${Environment}-RedisCacheSubnetGroup
+      Description: Subnet group for RedisCache
+      SubnetIds: !Ref DatabasePrivateSubnetIds
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # Replication group for Redis cluster & instance
+  RedisReplicationGroup:
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: cp-redis-on-demand
+      ReplicationGroupDescription: Redis Replication Group for Customer Portal
+      Engine: redis
+      CacheNodeType: !Ref RedisNodeType
+      NumNodeGroups: !Ref NumNodeGroups
+      CacheSubnetGroupName: !Ref RedisCacheSubnetGroup
+      CacheParameterGroupName: 'default.redis7.cluster.on'
+      EngineVersion: 7.0
+      AutomaticFailoverEnabled: true
+      TransitEncryptionEnabled: true # Enable encryption in transit
+      AtRestEncryptionEnabled: true # Enable encryption at rest
+      AutoMinorVersionUpgrade: true
+      KmsKeyId: !Ref RedisKMSKeyID
+      SecurityGroupIds:
+      - !Ref RedisSecurityGroup
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+        ## Log Delivery to cloudwatch for Redis Cluster
+      SnapshotWindow: '03:00-04:00'
+      SnapshotRetentionLimit: 7
+      LogDeliveryConfigurations:
+      - LogType: slow-log
+        DestinationType: cloudwatch-logs
+        LogFormat: json
+        DestinationDetails:
+          CloudWatchLogsDetails:
+            LogGroup: !Sub "/aws/elasticache/${AWS::StackName}/redis-slow-logs"
+      - LogType: engine-log
+        DestinationType: cloudwatch-logs
+        LogFormat: json # Specify the log format here (e.g., json or text)
+        DestinationDetails:
+          CloudWatchLogsDetails:
+            LogGroup: !Sub "/aws/elasticache/${AWS::StackName}/redis-engine-logs"
+  RedisKMSAlias:
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: alias/redis-ondemand-kms-key
+      TargetKeyId: !Ref RedisKMSKeyID
+  RedisKMSKeyID:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encryption and decryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: "*"
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  CloudWatchSlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/elasticache/${AWS::StackName}/redis-slow-logs"
+      RetentionInDays: 14
+  CloudWatchEngineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/elasticache/${AWS::StackName}/redis-engine-logs" # Log group for engine logs
+      RetentionInDays: 14
+  ## Redis Security Group(Allowed only for EKS Cluster)
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for the Redis cluster
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 6379
+        ToPort: 6379
+        SourceSecurityGroupId: !Ref ClusterSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 6379
+        ToPort: 6379
+        SourceSecurityGroupId: !Ref AuroraSecurityGroup
+  ## Alarm for CPU Utilization of redis cluster.
+  CPUUtilizationAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Redis-Replication-Group-CPUUtilization-Alarm-node-1-warning
+      AlarmDescription: "Alarm for CPU utilization of the Redis replication group node 1"
+      Namespace: "AWS/ElastiCache"
+      MetricName: "CPUUtilization"
+      Dimensions:
+      - Name: "CacheClusterId"
+        Value: !Sub '${RedisReplicationGroup}-0001-001'
+      - Name: "CacheNodeId"
+        Value: '0001'
+      Statistic: "Average"
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref WarningThreshold
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+      - !Ref CPUUtilizationAlarmTopic
+      OKActions:
+      - !Ref CPUUtilizationAlarmTopic
+      TreatMissingData: "missing"
+  CPUUtilizationCriticalAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Redis-Replication-Group-CPUUtilization-Alarm-node-1-critical
+      AlarmDescription: "Alarm for CPU utilization of the Redis replication group node 1"
+      Namespace: "AWS/ElastiCache"
+      MetricName: "CPUUtilization"
+      Dimensions:
+      - Name: "CacheClusterId"
+        Value: !Sub '${RedisReplicationGroup}-0001-001'
+      - Name: "CacheNodeId"
+        Value: '0001'
+      Statistic: "Average"
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref CriticalThreshold
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+      - !Ref CPUUtilizationAlarmTopic
+      OKActions:
+      - !Ref CPUUtilizationAlarmTopic
+      TreatMissingData: "missing"
+
+  CPUUtilizationAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "CPU Utilization Alarm Topic"
+      TopicName: "RedisCPUUtilizationAlarmTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+  CPUUtilizationAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref CPUUtilizationAlarmTopic
+      Endpoint: !Ref SNSEmailID
+  # Alarm for memory usage for Redis Cluster
+  DatabaseMemoryUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Redis-Replication-Group-DatabaseMemoryUsage-Alarm-warning
+      AlarmDescription: "Alarm for database memory usage percentage warning of the Redis replication group"
+      Namespace: "AWS/ElastiCache"
+      MetricName: DatabaseMemoryUsagePercentage
+      Dimensions:
+      - Name: "CacheClusterId"
+        Value: !Sub '${RedisReplicationGroup}-0001-001'
+      Statistic: "Average"
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref WarningThreshold
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+      - !Ref DatabaseMemoryUsageAlarmTopic
+      OKActions:
+      - !Ref DatabaseMemoryUsageAlarmTopic
+  DatabaseMemoryCriticalUsageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Redis-Replication-Group-DatabaseMemoryUsage-Alarm-Critical
+      AlarmDescription: "Alarm for critical database memory usage percentage of the Redis replication group"
+      Namespace: "AWS/ElastiCache"
+      MetricName: DatabaseMemoryUsagePercentage
+      Dimensions:
+      - Name: "CacheClusterId"
+        Value: !Sub '${RedisReplicationGroup}-0001-001'
+      Statistic: "Average"
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref CriticalThreshold
+      ComparisonOperator: "GreaterThanOrEqualToThreshold"
+      AlarmActions:
+      - !Ref DatabaseMemoryUsageAlarmTopic
+      OKActions:
+      - !Ref DatabaseMemoryUsageAlarmTopic
+  DatabaseMemoryUsageAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Database Memory Usage Alarm Topic"
+      TopicName: "RedisDatabaseMemoryUsageAlarmTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+  DatabaseMemoryUsageAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref DatabaseMemoryUsageAlarmTopic
+      Endpoint: !Ref SNSEmailID
+  # Alarm for Freeable memory for Redis Cluster
+  FreeableMemoryAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Redis-Replication-Group-FreeableMemory-Alarm-node1-warning
+      AlarmDescription: "Alarm for freeable memory of the Redis node 1"
+      Namespace: "AWS/ElastiCache"
+      MetricName: "FreeableMemory"
+      Dimensions:
+      - Name: "CacheClusterId"
+        Value: !Sub '${RedisReplicationGroup}-0001-001'
+      Statistic: "Average"
+      Period: 60 # 5 minutes
+      EvaluationPeriods: 5
+      Threshold: !Ref RedisFreeableMemoryWarning
+      ComparisonOperator: "LessThanOrEqualToThreshold"
+      AlarmActions:
+      - !Ref FreeableMemoryAlarmTopic
+      OKActions:
+      - !Ref FreeableMemoryAlarmTopic
+      TreatMissingData: "missing"
+  FreeableMemoryCriticalAlarm1:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Redis-Replication-Group-FreeableMemory-Alarm-node1-critical
+      AlarmDescription: "Alarm for freeable memory of the Redis node 1"
+      Namespace: "AWS/ElastiCache"
+      MetricName: "FreeableMemory"
+      Dimensions:
+      - Name: "CacheClusterId"
+        Value: !Sub '${RedisReplicationGroup}-0001-001'
+      Statistic: "Average"
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref RedisFreeableMemoryCritical
+      ComparisonOperator: "LessThanOrEqualToThreshold"
+      AlarmActions:
+      - !Ref FreeableMemoryAlarmTopic
+      OKActions:
+      - !Ref FreeableMemoryAlarmTopic
+      TreatMissingData: "missing"
+
+  FreeableMemoryAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "Freeable Memory Alarm Topic"
+      TopicName: "RedisFreeableMemoryAlarmTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+  FreeableMemoryAlarmSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref FreeableMemoryAlarmTopic
+      Endpoint: !Ref SNSEmailID
+
+##############################################################################################################################
+
+

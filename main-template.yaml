@@ -1,0 +1,2033 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template for non-prod environment.
+
+Parameters:
+  ## Use Exisitng SSM Parameters
+  Environment:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /account/environment
+  ## Use Exisitng VPC Parameters
+  VPCId:
+    Type: AWS::EC2::VPC::Id
+    Description: ID of the existing VPC
+  ApplicationPrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Provide the subnets for application(fargate profile and EKS), EFS
+  DatabasePrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Provide the subnets for Aurora db subnet group
+  ## Aurora Postegresql Parameters
+  AuroraDBPort:
+    Type: String
+    Description: Provide port number of Aurora PostegresqlDB.
+  AuroraDBKmsKeyID:
+    Type: String
+    Description: Provide KMSKeyID for Encryption of AuroraPostegreSql DB.
+  AutoMinorVersionUpgrade:
+    Type: String
+    Description: Set to true if auto minor version upgrade is required
+    AllowedValues:
+    - "true"
+    - "false"
+  DBInstanceClass:
+    Type: String
+    Description: Select the sizing for RDS instance
+    AllowedValues:
+    - "db.t3.micro"
+    - "db.t3.small"
+    - "db.t3.medium"
+    - "db.t3.large"
+    - "db.t4g.medium"
+    - "db.t4g.large"
+    - "db.r5.large"
+    - "db.r5.xlarge"
+    - "db.r5.2xlarge"
+    - "db.r5.4xlarge"
+    - "db.r6g.large"
+    - "db.r6g.xlarge"
+    - "db.r6g.2xlarge"
+    - "db.r6i.large"
+    - "db.r6i.xlarge"
+    - "db.r6i.2xlarge"
+  AuroraMasterUsername:
+    Type: String
+    Description: Username for Aurora DB
+  # MemCacheNodeType:
+  #   Type: String
+  #   Description: Select the sizing for Memcache instance
+  #   AllowedValues:
+  #   - "cache.t3.medium"
+  #   - "cache.r5.large"
+  #   - "cache.m5.large"
+  # RedisNodeType:
+  #   Type: String
+  #   Description: Select the sizing for Redis instance
+  #   AllowedValues:
+  #   - "cache.t3.medium"
+  #   - "cache.r5.large"
+  #   - "cache.m5.large"
+
+  ##KMS Key
+  # ECRKMSKeyAlias:
+  #   Type: String
+  #   Description: Alias for ECR KMS Key
+  # RedisKMSKeyAlias:
+  #   Type: String
+  #   Description: Alias for Redis KMS Key
+
+  ###################################################################################################################  
+  ## Select Private Subnets For OpenSearch
+  # SubnetIdsForOpenSearch:
+  #   Type: List<AWS::EC2::Subnet::Id>
+  #   Description: Select the subnet for the OpenSearch cluster
+  # OpenSearchKMSKeyID:
+  #   Type: String
+  #   Description: Provide KMSKeyID for Opensearch Cluster.
+  # InstanceCount:
+  #   Type: Number
+  #   Default: 2
+  #   Description: Enter the number of instances for the OpenSearch cluster
+  # InstanceType:
+  #   Type: String
+  #   Default: t3.medium.search
+  #   Description: Enter the instance type for the OpenSearch cluster
+
+  # VolumeType:
+  #   Type: String
+  #   Default: gp3
+  #   Description: Enter the EBS volume type for the OpenSearch cluster
+  # VolumeSize:
+  #   Type: Number
+  #   Default: 10
+  #   Description: Enter the size (in GB) of the EBS volumes for the OpenSearch cluster
+  # AvailabilityZoneCount:
+  #   Type: Number
+  #   Default: 2
+  #   Description: Enter the number of availability zones for the OpenSearch cluster
+  ###########################################################################################################
+
+  ## Elastic Cache Cluster Parameters
+  # CacheNodeType:
+  #   Description: The cache node type for the cache cluster
+  #   Default: cache.t3.medium
+  #   Type: String
+  # CacheParameterGroupName:
+  #   Description: The parameter group name for the cache cluster
+  #   Default: default.memcached1.6
+  #   Type: String
+  ## SNS Parameters
+  SNSKMSKeyID:
+    Type: String
+    Description: Give the key id for SNS topic encryption
+  SNSEmailID:
+    Type: String
+    Description: Give the email for cloudwatch alers
+  ## AWS Backup KMS Key id parameter
+  BackupsKMSKeyID:
+    Type: String
+    Description: Give the key id for Backup vault encryption
+  #EFS 
+  EFSKmsKey:
+    Type: String
+    Description: Key ID for EFS encryption
+  ## Alarm thresholds
+  EFSThreshold:
+    Type: String
+    Description: Value for EFS Burst credit balance alarm threshold
+  WarningThreshold:
+    Type: String
+    Description: Percentage value for warning alarm
+    Default: 75
+  CriticalThreshold:
+    Type: String
+    Description: Percentage value for critical alarm
+    Default: 90
+  DatabaseConnections:
+    Type: String
+    Description: Number of database connections for alarm
+    Default: 10
+  AuroraClusterFreeableMemoryWarning:
+    Type: String
+    Description: Memory value for warning alarm for Aurora Cluster
+  AuroraClusterFreeableMemoryCritical:
+    Type: String
+    Description: Memory value for critical alarm for Aurora Cluster
+  AuroraInstanceFreeableMemoryWarning:
+    Type: String
+    Description: Memory value for warning alarm for Aurora Instances
+  AuroraInstanceFreeableMemoryCritical:
+    Type: String
+    Description: Memory value for critical alarm for Aurora Instances
+  AuroraClusterStorageWarning:
+    Type: String
+    Description: Storage value for warning alarm for Aurora Cluster Free local storage
+  AuroraClusterStorageCritical:
+    Type: String
+    Description: Storage value for critical alarm for Aurora Cluster Free local storage
+  ReadIOPSAurora:
+    Type: String
+    Description: Read IOPS value for alarm for Aurora Cluster
+  WriteIOPSAurora:
+    Type: String
+    Description: Write IOPS value for alarm for Aurora Cluster
+  # MemcachedClusterFreeableMemoryWarning:
+  #   Type: String
+  #   Description: Threshold value for Memcached cluster freeable memory warning
+  # MemcachedClusterFreeableMemoryCritical:
+  #   Type: String
+  #   Description: Threshold value for Memcached cluster freeable memory critical
+  # RedisFreeableMemoryWarning:
+  #   Type: String
+  #   Description: Threshold value for Redis freeable memory warning 
+  # RedisFreeableMemoryCritical:
+  #   Type: String
+  #   Description: Threshold value for Redis freeable memory critical
+  ## CICD IP inputs
+  CICDA:
+    Type: String
+    Description: Provide first CICD IP
+    Default: 10.7.16.128/25
+  CICDB:
+    Type: String
+    Description: Provide second CICD IP
+    Default: 10.7.17.128/25
+  UserMicroserviceECRRepositoryName:
+    Type: String
+    Description: Provide the name for user microservice
+    Default: cp-usermicroservice
+
+  # #############################################################################################################
+Resources:
+  # ## EFS Role for accessing KMS and EKS Cluster.
+  CPEFSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-EFSRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - elasticfilesystem.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AWSKeyManagementServicePowerUser
+      - arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ## Aurora Role for acessing KMS service
+  CPAuroraRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-AuroraRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - rds.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AWSKeyManagementServicePowerUser
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ## EKS Cluster Security Group
+  ClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EKS cluster security group
+      VpcId: !Ref VPCId
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+
+
+
+
+
+  ControlPlaneSecurityGroupIngressRule:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ClusterSecurityGroup
+      IpProtocol: -1
+      SourceSecurityGroupId: !Ref ClusterSecurityGroup
+
+  IngressRule1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ClusterSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref CICDA
+
+  IngressRule2:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ClusterSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref CICDB
+
+
+  # ## EFS Security Group(Allowed only for EKS Cluster)
+  EfsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS security group
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 2049
+        ToPort: 2049
+        SourceSecurityGroupId: !Ref ClusterSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ## Aurora Security Group (Allowed only for EKS Cluster)
+  AuroraSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Aurora security group
+      VpcId: !Ref VPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: !Ref AuroraDBPort
+        ToPort: !Ref AuroraDBPort
+        SourceSecurityGroupId: !Ref ClusterSecurityGroup
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  #       #############################################################################################################
+  # ## EKS Cluster 
+  Cluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Sub ${Environment}-EKSCluster
+      RoleArn: !GetAtt EKSClusterRole.Arn
+      Version: '1.28'
+      Logging:
+        ClusterLogging:
+          EnabledTypes:
+          - Type: api
+          - Type: audit
+      ResourcesVpcConfig:
+        SecurityGroupIds:
+        - !Ref ClusterSecurityGroup
+        SubnetIds: !Ref ApplicationPrivateSubnetIds
+        EndpointPrivateAccess: true
+        EndpointPublicAccess: false
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ## EKS Cluster Role
+  EKSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-EKSClusterRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - eks.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+      - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ## Fargate Profile for EKS Cluster
+  FargateProfile:
+    Type: AWS::EKS::FargateProfile
+    DependsOn: Cluster
+    Properties:
+      ClusterName: !Ref Cluster
+      FargateProfileName: !Sub ${Environment}-Fargateprofile
+      PodExecutionRoleArn: !GetAtt FargateProfileRole.Arn
+      Subnets: !Ref ApplicationPrivateSubnetIds
+      Selectors:
+      - Namespace: default
+      - Namespace: kube-system
+      - Namespace: !Ref Environment
+      - Namespace: aws-observability
+      - Namespace: fargate-container-insights
+
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ## Fargate Profile role for EKS Cluster
+  FargateProfileRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Environment}-FargateProfile-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - eks-fargate-pods.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  #       #########################################################################################################
+  # ## Elastic File System(EFS) for EKS Cluster
+  FileSystem:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub ${Environment}-EFS
+      PerformanceMode: "generalPurpose"
+      ThroughputMode: "bursting"
+      Encrypted: true
+      KmsKeyId: !Ref EFSKmsKey
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_14_DAYS
+  FileSystemMarketData:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      FileSystemTags:
+      - Key: Name
+        Value: !Sub ${Environment}-MarketData
+      PerformanceMode: "generalPurpose"
+      ThroughputMode: "bursting"
+      BackupPolicy:
+        Status: ENABLED
+      Encrypted: true
+      KmsKeyId: !Ref EFSKmsKey
+      LifecyclePolicies:
+      - TransitionToIA: AFTER_14_DAYS
+  MountTargetResourceMarketData1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystemMarketData
+      SubnetId: !Select [0, !Ref ApplicationPrivateSubnetIds]
+      SecurityGroups:
+      - !Ref EfsSecurityGroup
+  MountTargetResourceMarketData2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystemMarketData
+      SubnetId: !Select [1, !Ref ApplicationPrivateSubnetIds]
+      SecurityGroups:
+      - !Ref EfsSecurityGroup
+
+  # ## Alarm for burst credit balance of an Amazon Elastic File System (Amazon EFS) filesystem.
+  EFSBurstCreditBalanceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EFS-Burst-Credit-Balance-Alarm
+      Namespace: AWS/EFS
+      MetricName: BurstCreditBalance
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref EFSThreshold # Adjust as per your BurstCreditBalance threshold
+      ComparisonOperator: LessThanOrEqualToThreshold
+      AlarmDescription: Alarm for low BurstCreditBalance in EFS
+      Dimensions:
+      - Name: FileSystemId
+        Value: !Ref FileSystem
+      AlarmActions:
+      - !Ref EFSTopic
+      OKActions:
+      - !Ref EFSTopic
+  EFSBurstCreditBalanceAlarmforMarketoEFS:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: EFS-Burst-Credit-Balance-Alarm-MarketoEFS
+      Namespace: AWS/EFS
+      MetricName: BurstCreditBalance
+      Statistic: Minimum
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref EFSThreshold # Adjust as per your BurstCreditBalance threshold
+      ComparisonOperator: LessThanOrEqualToThreshold
+      AlarmDescription: Alarm for low BurstCreditBalance in Market Data EFS
+      Dimensions:
+      - Name: FileSystemId
+        Value: !Ref FileSystemMarketData
+      AlarmActions:
+      - !Ref EFSTopic
+      OKActions:
+      - !Ref EFSTopic
+  EFSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "EFSTopic"
+      TopicName: "EFSTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  EFSSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref EFSTopic
+  ## Mount Targets For EFS
+  MountTargetResource1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Select [0, !Ref ApplicationPrivateSubnetIds]
+      SecurityGroups:
+      - !Ref EfsSecurityGroup
+  MountTargetResource2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref FileSystem
+      SubnetId: !Select [1, !Ref ApplicationPrivateSubnetIds]
+      SecurityGroups:
+      - !Ref EfsSecurityGroup
+      ################################################################################################
+  # ## DB Subnet Group for Aurora Cluster
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub ${Environment}-DBsubnet-group
+      DBSubnetGroupDescription: Subnet group for Aurora DB
+      SubnetIds: !Ref DatabasePrivateSubnetIds
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  ## RDS Aurora Cluster
+  AuroraCluster:
+    Type: AWS::RDS::DBCluster
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: '15.4'
+      CopyTagsToSnapshot: true
+      DeletionProtection: true
+      DBClusterIdentifier: !Sub ${Environment}-Aurora-cluster
+      DBClusterParameterGroupName: !Ref DBClusterParameterGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      DatabaseName: customerportaldatabase
+      MasterUsername: !Ref AuroraMasterUsername
+      ManageMasterUserPassword: true
+      StorageEncrypted: true
+      Port: !Ref AuroraDBPort
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '00:00-00:30'
+      KmsKeyId: !Ref AuroraDBKmsKeyID
+      EnableIAMDatabaseAuthentication: true
+      EnableCloudwatchLogsExports:
+      - postgresql
+      AssociatedRoles:
+      - RoleArn: !GetAtt CPAuroraRole.Arn
+        FeatureName: s3Import
+      VpcSecurityGroupIds:
+      - !Ref AuroraSecurityGroup # Attach AuroraSecurityGroup
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  DBClusterParameterGroup:
+    Type: AWS::RDS::DBClusterParameterGroup
+    Properties:
+      Description: Cluster parameter group
+      Family: aurora-postgresql15 # Change the family if needed
+      Parameters:
+        timezone: Asia/Kuala_Lumpur
+  ## RDS Aurora Instance
+  DBInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: '15.4'
+      DBInstanceIdentifier: !Sub ${Environment}-Aurora-DB-instance
+      CACertificateIdentifier: rds-ca-rsa2048-g1
+      DBInstanceClass: !Ref DBInstanceClass
+      DBClusterIdentifier: !Ref AuroraCluster
+      AutoMinorVersionUpgrade: !Ref AutoMinorVersionUpgrade
+      PubliclyAccessible: false
+      StorageType: aurora
+      EnablePerformanceInsights: true
+      PerformanceInsightsRetentionPeriod: 7
+      DBParameterGroupName: !Ref DBParameterGroup
+      MonitoringInterval: 60
+      MonitoringRoleArn: !GetAtt ['EnhancedMonitoringRole', 'Arn']
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  # ReadDBInstance:
+  #   Type: AWS::RDS::DBInstance
+  #   Properties:
+  #     Engine: aurora-postgresql
+  #     EngineVersion: '15.4'
+  #     DBInstanceIdentifier: !Sub ${Environment}-Aurora-DB-Read-instance
+  #     CACertificateIdentifier: rds-ca-rsa2048-g1
+  #     DBInstanceClass: !Ref DBInstanceClass
+  #     DBClusterIdentifier: !Ref AuroraCluster
+  #     AutoMinorVersionUpgrade: !Ref AutoMinorVersionUpgrade
+  #     PubliclyAccessible: false
+  #     StorageType: aurora
+  #     EnablePerformanceInsights: true
+  #     PerformanceInsightsRetentionPeriod: 7
+  #     DBParameterGroupName: !Ref DBParameterGroup
+  #     MonitoringInterval: 60
+  #     MonitoringRoleArn: !GetAtt ['EnhancedMonitoringRole', 'Arn']
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+
+
+
+  ## CPU Utilization for AuroraPostgresql
+  AuroraPostgresqlCPUUtilizationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Postgresql-CPUUtilization-Alarm-cluster-level-warning
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref WarningThreshold # Adjust as per your CPU utilization threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmDescription: Alarm for  CPU utilization warning in Aurora PostgreSQL cluster
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+      AlarmActions:
+      - !Ref SNSTopic
+      OKActions:
+      - !Ref SNSTopic
+  AuroraPostgresqlCPUUtilizationCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Postgresql-CPUUtilization-Alarm-cluster-level-critical
+      Namespace: AWS/RDS
+      MetricName: CPUUtilization
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: !Ref CriticalThreshold # Adjust as per your CPU utilization threshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmDescription: Alarm for critical CPU utilization in Aurora PostgreSQL Cluster
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+
+      AlarmActions:
+      - !Ref SNSTopic
+      OKActions:
+      - !Ref SNSTopic
+  ## Enhanced Monitoring Role for RDS Postgres
+  EnhancedMonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: ''
+          Effect: Allow
+          Principal:
+            Service: monitoring.rds.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Path: "/"
+  ## Alarm for CPU Utilization
+  AuroraDBWriterCPUUtilizationAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Aurora-DB-Writer-Instance-CPU-Alarm-warning
+      AlarmActions:
+      - Ref: AuroraDBCPUTopic
+      OKActions:
+      - !Ref AuroraDBCPUTopic
+      AlarmDescription: 'CPU_Utilization warning alarm for db writer instance'
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstance
+
+      MetricName: CPUUtilization
+      Statistic: Maximum
+      Namespace: 'AWS/RDS'
+      Threshold: !Ref WarningThreshold
+      Unit: Percent
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+      Period: 60
+      EvaluationPeriods: '5'
+      TreatMissingData: 'missing'
+  AuroraDBWriterCPUUtilizationCriticalAlarm:
+    Type: "AWS::CloudWatch::Alarm"
+    Properties:
+      ActionsEnabled: true
+      AlarmName: Aurora-DB-Writer-Instance-CPU-Alarm-Critical
+      AlarmActions:
+      - Ref: AuroraDBCPUTopic
+      OKActions:
+      - !Ref AuroraDBCPUTopic
+      AlarmDescription: 'Critical CPU_Utilization alarm for db writer instance'
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstance
+
+      MetricName: CPUUtilization
+      Statistic: Maximum
+      Namespace: 'AWS/RDS'
+      Threshold: !Ref CriticalThreshold
+      Unit: Percent
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+      Period: 60
+      EvaluationPeriods: '5'
+      TreatMissingData: 'missing'
+  # AuroraReadDBCPUUtilizationAlarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: Aurora-DB-Reader-Instance-CPU-Alarm-warning
+  #     AlarmActions:
+  #     - Ref: AuroraDBCPUTopic
+  #     AlarmDescription: 'CPU_Utilization warning alarm for db reader instance'
+  #     Dimensions:
+  #     - Name: DBInstanceIdentifier
+  #       Value: !Ref ReadDBInstance
+
+  #     MetricName: CPUUtilization
+  #     Statistic: Maximum
+  #     Namespace: 'AWS/RDS'
+  #     Threshold: !Ref WarningThreshold
+  #     Unit: Percent
+  #     ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+  #     Period: 300
+  #     EvaluationPeriods: '5'
+  #     TreatMissingData: 'missing'
+  # AuroraReadDBCPUUtilizationCriticalAlarm:
+  #   Type: "AWS::CloudWatch::Alarm"
+  #   Properties:
+  #     ActionsEnabled: true
+  #     AlarmName: Aurora-DB-Reader-Instance-CPU-Alarm-critical
+  #     AlarmActions:
+  #     - Ref: AuroraDBCPUTopic
+  #     AlarmDescription: 'Critical CPU_Utilization alarm for db reader instance'
+  #     Dimensions:
+  #     - Name: DBInstanceIdentifier
+  #       Value: !Ref ReadDBInstance
+
+  #     MetricName: CPUUtilization
+  #     Statistic: Maximum
+  #     Namespace: 'AWS/RDS'
+  #     Threshold: !Ref CriticalThreshold
+  #     Unit: Percent
+  #     ComparisonOperator: 'GreaterThanOrEqualToThreshold'
+  #     Period: 900
+  #     EvaluationPeriods: '5'
+  #     TreatMissingData: 'missing'
+  AuroraDBCPUTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBCPUTopic"
+      TopicName: "AuroraDBCPUTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+
+  AuroraDBCPUSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref AuroraDBCPUTopic
+  ## Aurora DB Connections Alarm
+  AuroraDBConnectionsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-DB-Cluster-Connections-Alarm
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: DatabaseConnections
+      Namespace: AWS/RDS
+      Statistic: SampleCount
+      Period: 60
+      Threshold: !Ref DatabaseConnections # Adjust the threshold value as needed
+      AlarmDescription: "Alarm when the number of RDS cluster connections exceeds 10"
+      AlarmActions:
+      - !Ref AuroraDBConnectionsTopic # Replace with the ARN of your SNS topic for notifications
+      OKActions:
+      - !Ref AuroraDBConnectionsTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+
+  AuroraDBConnectionsTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBConnectionsTopic"
+      TopicName: "AuroraDBConnectionsTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  AuroraDBConnectionsSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref AuroraDBConnectionsTopic
+  ## Alarm for Freeable memory RDS Postgres
+  AuroraDBFreeableMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-RDS-Cluster-Freeable-Memory-Alarm-warning
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: FreeableMemory
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref AuroraClusterFreeableMemoryWarning
+      AlarmDescription: "Alarm for Aurora RDS Cluster freeable memory warning"
+      AlarmActions:
+      - !Ref AuroraDBFreeableTopic
+      OKActions:
+      - !Ref AuroraDBFreeableTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+  AuroraDBFreeableMemoryCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-RDS-Cluster-Freeable-Memory-Alarm-critical
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: FreeableMemory
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref AuroraClusterFreeableMemoryCritical
+      AlarmDescription: "Alarm when the freeable memory on the Aurora DB cluster reaches critical"
+      AlarmActions:
+      - !Ref AuroraDBFreeableTopic
+      OKActions:
+      - !Ref AuroraDBFreeableTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+  AuroraDBWriterFreeableMemoryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Read-Instance-Freeable-Memory-Alarm-Warning
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: FreeableMemory
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref AuroraInstanceFreeableMemoryWarning # Adjust the threshold value as needed (e.g., 5 GB in bytes)
+      AlarmDescription: "Alarm for freeable memory warning of Aurora writer instance"
+      AlarmActions:
+      - !Ref AuroraDBFreeableTopic # Replace with the ARN of your SNS topic for notifications
+      OKActions:
+      - !Ref AuroraDBFreeableTopic
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstance
+  AuroraDBWriterFreeableMemoryCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Read-Instance-Freeable-Memory-Alarm-Critical
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: FreeableMemory
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref AuroraInstanceFreeableMemoryCritical # Adjust the threshold value as needed (e.g., 5 GB in bytes)
+      AlarmDescription: "Alarm for critical freeable memory of Aurora writer instance"
+      AlarmActions:
+      - !Ref AuroraDBFreeableTopic # Replace with the ARN of your SNS topic for notifications
+      OKActions:
+      - !Ref AuroraDBFreeableTopic
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstance
+  # AuroraDBReaderFreeableMemoryAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Aurora-Write-Instance-Freeable-Memory-Alarm-Warning
+  #     AlarmDescription: Alarm for freeable memory warning of Aurora reader instance
+  #     ComparisonOperator: LessThanOrEqualToThreshold
+  #     EvaluationPeriods: 5
+  #     MetricName: FreeableMemory
+  #     Namespace: AWS/RDS
+  #     Statistic: Average
+  #     Period: 300
+  #     Threshold: !Ref AuroraInstanceFreeableMemoryWarning # Adjust the threshold value as needed (e.g., 5 GB in bytes)
+  #     AlarmActions:
+  #     - !Ref AuroraDBFreeableTopic # Replace with the ARN of your SNS topic for notifications
+  #     Dimensions:
+  #     - Name: DBInstanceIdentifier
+  #       Value: !Ref ReadDBInstance
+  # AuroraDBReaderFreeableMemoryCriticalAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Aurora-Write-Instance-Freeable-Memory-Alarm-Critical
+  #     AlarmDescription: Alarm for critical freeable memory of Aurora reader instance
+  #     ComparisonOperator: LessThanOrEqualToThreshold
+  #     EvaluationPeriods: 5
+  #     MetricName: FreeableMemory
+  #     Namespace: AWS/RDS
+  #     Statistic: Average
+  #     Period: 900
+  #     Threshold: !Ref AuroraInstanceFreeableMemoryCritical # Adjust the threshold value as needed (e.g., 5 GB in bytes)
+  #     AlarmActions:
+  #     - !Ref AuroraDBFreeableTopic # Replace with the ARN of your SNS topic for notifications
+  #     Dimensions:
+  #     - Name: DBInstanceIdentifier
+  #       Value: !Ref ReadDBInstance
+
+  AuroraDBFreeableTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBFreeableTopic"
+      TopicName: "AuroraDBFreeableTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  AuroraDBFreeableSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref AuroraDBFreeableTopic
+  ## Alarm for DB free storage RDS Postgres
+  AuroraDBFreeStorageSpaceAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Cluster-Free-Storage-Space-Alarm-Warning
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: FreeLocalStorage
+      Namespace: AWS/RDS
+      Statistic: Minimum
+      Period: 60
+      Threshold: !Ref AuroraClusterStorageWarning
+      AlarmDescription: "Alarm when the free storage space reaches warning level on the Aurora DB cluster"
+      AlarmActions:
+      - !Ref AuroraDBStorageTopic
+      OKActions:
+      - !Ref AuroraDBStorageTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+  AuroraDBFreeStorageSpaceCriticalAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Cluster-Free-Storage-Space-Alarm-Critical
+      ComparisonOperator: LessThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: FreeLocalStorage
+      Namespace: AWS/RDS
+      Statistic: Minimum
+      Period: 60
+      Threshold: !Ref AuroraClusterStorageCritical
+      AlarmDescription: "Alarm when the free storage space on the Aurora DB cluster is critical"
+      AlarmActions:
+      - !Ref AuroraDBStorageTopic
+      OKActions:
+      - !Ref AuroraDBStorageTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+  AuroraDBStorageTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBStorageTopic"
+      TopicName: "AuroraDBStorageTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  AuroraDBStorageSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref AuroraDBStorageTopic
+  ## Alarm for IOPS Of RDS Postgres
+  ReadIOPSAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Cluster-Read-IOPS-Alarm
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: ReadIOPS
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref ReadIOPSAurora
+      AlarmDescription: "Alarm when Aurora cluster read IOPS is greater than or equal to 1000 for 5 minutes."
+      AlarmActions:
+      - !Ref AuroraDBReadIOPSTopic
+      OKActions:
+      - !Ref AuroraDBReadIOPSTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+  ReadIOPSAlarmforwriter:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Read-IOPS-Alarm-writer-instance
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: ReadIOPS
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref ReadIOPSAurora
+      AlarmDescription: "Alarm when Aurora DB writer instance read IOPS"
+      AlarmActions:
+      - !Ref AuroraDBReadIOPSTopic
+      OKActions:
+      - !Ref AuroraDBReadIOPSTopic
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstance
+  # ReadIOPSAlarmforreader:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Aurora-Read-IOPS-Alarm-reader-instance
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     EvaluationPeriods: 5
+  #     MetricName: ReadIOPS
+  #     Namespace: AWS/RDS
+  #     Statistic: Average
+  #     Period: 300
+  #     Threshold: !Ref ReadIOPSAurora 
+  #     AlarmDescription: "Alarm when Aurora DB reader instance read IOPS"
+  #     AlarmActions:
+  #     - !Ref AuroraDBReadIOPSTopic 
+  #     Dimensions:
+  #     - Name: DBInstanceIdentifier
+  #       Value: !Ref ReadDBInstance
+  AuroraDBReadIOPSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBReadIOPSTopic"
+      TopicName: "AuroraDBReadIOPSTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  AuroraDBReadIOPSAlarmSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref AuroraDBReadIOPSTopic
+  ## Alarm for write IOPS of RDS Postgres
+  WriteIOPSAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Cluster-Write-IOPS-Alarm
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: WriteIOPS
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref WriteIOPSAurora
+      AlarmDescription: "Alarm when Aurora cluster write IOPS"
+      AlarmActions:
+      - !Ref AuroraDBWriteIOPSTopic
+      OKActions:
+      - !Ref AuroraDBWriteIOPSTopic
+      Dimensions:
+      - Name: DBClusterIdentifier
+        Value: !Ref AuroraCluster
+
+  WriteIOPSAlarmforWriter:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: Aurora-Write-IOPS-Alarm-for-writer-instance
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 5
+      MetricName: WriteIOPS
+      Namespace: AWS/RDS
+      Statistic: Average
+      Period: 60
+      Threshold: !Ref WriteIOPSAurora
+      AlarmDescription: "Alarm when Aurora DB writer instance IOPS"
+      AlarmActions:
+      - !Ref AuroraDBWriteIOPSTopic
+      OKActions:
+      - !Ref AuroraDBWriteIOPSTopic
+      Dimensions:
+      - Name: DBInstanceIdentifier
+        Value: !Ref DBInstance
+  # WriteIOPSAlarmforReader:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Aurora-Write-IOPS-Alarm-for-reader-instance
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     EvaluationPeriods: 5
+  #     MetricName: WriteIOPS
+  #     Namespace: AWS/RDS
+  #     Statistic: Average
+  #     Period: 300
+  #     Threshold: !Ref WriteIOPSAurora 
+  #     AlarmDescription: "Alarm when Aurora DB reader instance write IOPS"
+  #     AlarmActions:
+  #     - !Ref AuroraDBWriteIOPSTopic 
+  #     Dimensions:
+  #     - Name: DBInstanceIdentifier
+  #       Value: !Ref ReadDBInstance 
+
+
+  AuroraDBWriteIOPSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBWriteIOPSTopic"
+      TopicName: "AuroraDBWriteIOPSTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  AuroraDBWriteIOPSTopicSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref AuroraDBWriteIOPSTopic
+  ## DB Parameter group for RDS Postgres
+  DBParameterGroup:
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties:
+      Description: "Parameter group for Aurora"
+      Family: "aurora-postgresql15"
+      Parameters:
+        log_statement: "all"
+        log_duration: "on"
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  ## Log group and log stream for Postgres
+  DBLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: "AuroraDBLogs"
+      RetentionInDays: 30
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  DBLogStream:
+    Type: "AWS::Logs::LogStream"
+    Properties:
+      LogGroupName: !Ref DBLogGroup
+      LogStreamName: "AuroraDBStream"
+  SNSTopic:
+    Type: "AWS::SNS::Topic"
+    Properties:
+      DisplayName: "AuroraDBLogTopic"
+      TopicName: "AuroraDBLogTopic"
+      KmsMasterKeyId: !Ref SNSKMSKeyID
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+  SNSSubscription:
+    Type: "AWS::SNS::Subscription"
+    Properties:
+      Protocol: "email"
+      Endpoint: !Ref SNSEmailID
+      TopicArn: !Ref SNSTopic
+      ####################################################################################################
+  # CPOpenSearchCluster:
+  #   Type: 'AWS::OpenSearchService::Domain'
+  #   Properties:
+  #     ClusterConfig:
+  #       InstanceCount: !Ref InstanceCount
+  #       InstanceType: !Ref InstanceType
+  #       DedicatedMasterEnabled: false
+  #       ZoneAwarenessEnabled: true
+  #       ZoneAwarenessConfig:
+  #         AvailabilityZoneCount: !Ref AvailabilityZoneCount
+  #       MultiAZWithStandbyEnabled: false
+  #     EBSOptions:
+  #       EBSEnabled: true
+  #       VolumeType: !Ref VolumeType
+  #       VolumeSize: !Ref VolumeSize
+  #     VPCOptions:
+  #       SubnetIds: !Ref SubnetIdsForOpenSearch
+  #       SecurityGroupIds:
+  #       - !Ref ClusterSecurityGroup
+  #     EncryptionAtRestOptions:
+  #       Enabled: true
+  #       KmsKeyId: !Ref OpenSearchKMSKeyID
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+
+  #     LogPublishingOptions:
+  #       ES_APPLICATION_LOGS:
+  #         CloudWatchLogsLogGroupArn: !GetAtt ApplicationLogsCloudWatchLogGroup.Arn
+  #         Enabled: true
+  #       INDEX_SLOW_LOGS:
+  #         CloudWatchLogsLogGroupArn: !GetAtt IndexSlowLogsCloudWatchLogGroup.Arn
+  #         Enabled: true
+  #       SEARCH_SLOW_LOGS:
+  #         CloudWatchLogsLogGroupArn: !GetAtt SearchSlowLogsCloudWatchLogGroup.Arn
+  #         Enabled: true
+
+
+  # ApplicationLogsCloudWatchLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/opensearch/${Environment}/application-logs" # Customize the log group name based on your preference or requirements
+
+  # IndexSlowLogsCloudWatchLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/opensearch/${Environment}/index-slow-logs"
+
+  # SearchSlowLogsCloudWatchLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/opensearch/${Environment}/search-slow-logs"
+
+  # OpenSearchCloudWatchPolicy:
+  #   Type: AWS::Logs::ResourcePolicy
+  #   Properties:
+  #     PolicyName: OpenSearchCloudWatchPolicy
+  #     PolicyDocument: !Sub |
+  #       {
+  #         "Version": "2012-10-17",
+  #         "Statement": [
+  #           {
+  #             "Sid": "AllowOpenSearchToPublishLogs",
+  #             "Effect": "Allow",
+  #             "Principal": {
+  #               "Service": "es.amazonaws.com"
+  #             },
+  #             "Action": [
+  #               "logs:PutLogEvents",
+  #               "logs:CreateLogStream"
+  #             ],
+  #             "Resource": [
+  #               "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/opensearch/${Environment}/application-logs:*",
+  #               "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/opensearch/${Environment}/index-slow-logs:*",
+  #               "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/opensearch/${Environment}/search-slow-logs:*"
+
+  #             ]
+  #           }
+  #         ]
+  #       }
+  # OpensearchClusterStatusAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: ElasticsearchClusterStatusAlarm
+  #     Namespace: 'AWS/ES'
+  #     MetricName: 'ClusterStatus.yellow'
+  #     Statistic: Maximum
+  #     Period: 60
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold
+  #     AlarmDescription: Alarm for yellow or red cluster status in Amazon ES
+  #     EvaluationPeriods: 5
+  #     Threshold: 1
+  #     Dimensions:
+  #       - Name: ClientId
+  #         Value: !Ref AWS::AccountId
+  #       - Name: DomainName
+  #         Value: !Ref CPOpenSearchCluster
+  #     AlarmActions:
+  #       - !Ref OpensearchClusterStatusTopic
+
+  # ClusterStatusRed:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     # Alarm name + description
+  #     AlarmName: 'ClusterStatus.red >= 1'
+  #     AlarmDescription: 'Email when ClusterStatus.red >=1, 1 time within 1 minutes'
+  #     # Account + cluster
+  #     Namespace: 'AWS/ES'
+  #     Dimensions:
+  #       - Name: ClientId
+  #         Value: !Ref AWS::AccountId
+  #       - Name: DomainName
+  #         Value: !Ref CPOpenSearchCluster
+
+  #     Statistic: Maximum
+  #     MetricName: 'ClusterStatus.red'
+  #     ComparisonOperator: GreaterThanOrEqualToThreshold   
+  #     Threshold: 1
+  #     Period: 60
+  #     EvaluationPeriods: 1
+  #     # Action
+  #     OKActions:
+  #       - !Ref OpensearchClusterStatusTopic
+  #     AlarmActions:
+  #       - !Ref OpensearchClusterStatusTopic
+
+  # OpensearchClusterStatusTopic:
+  #   Type: "AWS::SNS::Topic"
+  #   Properties:
+  #     DisplayName: "OpensearchClusterStatusTopic"
+  #     TopicName: "OpensearchClusterStatusTopic"
+  #     KmsMasterKeyId: !Ref SNSKMSKeyID
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+
+  # OpensearchClusterStatusTopicSubscription:
+  #   Type: "AWS::SNS::Subscription"
+  #   Properties:
+  #     Protocol: "email"
+  #     Endpoint: !Ref SNSEmailID
+  #     TopicArn: !Ref OpensearchClusterStatusTopic
+  ########################################################################################
+  # Subnet group for Elastic Cache
+  # CacheSubnetGroup:
+  #   Type: AWS::ElastiCache::SubnetGroup
+  #   Properties:
+  #     CacheSubnetGroupName: !Sub ${Environment}-CacheSubnetGroup
+  #     Description: Subnet group for ElastiCache
+  #     SubnetIds: !Ref DatabasePrivateSubnetIds
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+  # ## Elastic cache cluster 
+  # CacheCluster:
+  #   Type: AWS::ElastiCache::CacheCluster
+  #   Properties:
+  #     CacheNodeType: !Ref MemCacheNodeType
+  #     CacheParameterGroupName: !Ref CacheParameterGroupName
+  #     ClusterName: !Sub ${Environment}-MemCacheCluster
+  #     Engine: memcached
+  #     EngineVersion: 1.6.17
+  #     NumCacheNodes: 1
+  #     TransitEncryptionEnabled: true
+  #     CacheSubnetGroupName: !Ref CacheSubnetGroup
+  #     VpcSecurityGroupIds:
+  #     - !Ref CacheSecurityGroup
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+  # ## ElasticCache Security group(Allowed only for EKS Cluster)
+  # CacheSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for the Memcache cluster
+  #     VpcId: !Ref VPCId
+  #     SecurityGroupIngress:
+  #     - IpProtocol: tcp
+  #       FromPort: 11211
+  #       ToPort: 11211
+  #       SourceSecurityGroupId: !Ref ClusterSecurityGroup
+  #     - IpProtocol: tcp
+  #       FromPort: 11211
+  #       ToPort: 11211
+  #       SourceSecurityGroupId: !Ref AuroraSecurityGroup
+
+  ## Alarm for Memcache CPU Utilization
+  # MemcacheCPUUtilizationAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Memcached-CPUUtilization-Alarm-warning
+  #     AlarmDescription: "Alarm for CPU utilization warning of the ElastiCache cluster"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "CPUUtilization"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Ref CacheCluster
+  #     Statistic: "Average"
+  #     Period: 300 
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref WarningThreshold
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref CPUCpuUtilizationTopic
+  #     TreatMissingData: "missing"
+  # MemcacheCPUUtilizationCriticalAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Memcached-CPUUtilization-Alarm-critcal
+  #     AlarmDescription: "Alarm for critical CPU utilization of the ElastiCache cluster"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "CPUUtilization"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Ref CacheCluster
+  #     Statistic: "Average"
+  #     Period: 900
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref CriticalThreshold 
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref CPUCpuUtilizationTopic
+  #     TreatMissingData: "missing"
+  # ## Alarm for Freeable memory
+  # MemcacheFreeableMemoryAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Memcached-Freeable-Memory-Alarm-Warning
+  #     AlarmDescription: "Alarm for freeable memory warning of the ElastiCache cluster"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "FreeableMemory"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Ref CacheCluster
+  #     Statistic: "Average"
+  #     Period: 300 # 5 minutes
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref MemcachedClusterFreeableMemoryWarning
+  #     ComparisonOperator: "LessThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref StorageAlarmTopic
+  #     TreatMissingData: "missing"
+  # MemcacheFreeableMemoryCriticalAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Memcached-Freeable-Memory-Alarm-Critical
+  #     AlarmDescription: "Alarm for critical freeable memory of the ElastiCache cluster"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "FreeableMemory"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Ref CacheCluster
+  #     Statistic: "Average"
+  #     Period: 900 
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref MemcachedClusterFreeableMemoryCritical 
+  #     ComparisonOperator: "LessThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref StorageAlarmTopic
+  #     TreatMissingData: "missing"
+  # CPUCpuUtilizationTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     DisplayName: "CPU Utilization Alarm"
+  #     TopicName: "MyCacheCluster-CPUCpuUtilization-Alarm-Topic"
+  #     KmsMasterKeyId: !Ref SNSKMSKeyID
+  # StorageAlarmTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     DisplayName: "Storage Alarm"
+  #     TopicName: "MyCacheCluster-Storage-Alarm-Topic"
+  #     KmsMasterKeyId: !Ref SNSKMSKeyID
+  # CPUCpuUtilizationAlarmSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: email
+  #     TopicArn: !Ref CPUCpuUtilizationTopic
+  #     Endpoint: !Ref SNSEmailID
+  # # StorageAlarmSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: email
+  #     TopicArn: !Ref StorageAlarmTopic
+  #     Endpoint: !Ref SNSEmailID
+  ## Cache subnet group for Redis cluster
+  #########################################################################################################
+  # RedisCacheSubnetGroup:
+  #   Type: AWS::ElastiCache::SubnetGroup
+  #   Properties:
+  #     CacheSubnetGroupName: !Sub ${Environment}-RedisCacheSubnetGroup
+  #     Description: Subnet group for RedisCache
+  #     SubnetIds: !Ref DatabasePrivateSubnetIds
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+  ## Replication group for Redis cluster & instance
+  # RedisReplicationGroup:
+  #   Type: AWS::ElastiCache::ReplicationGroup
+  #   Properties:
+  #     ReplicationGroupDescription: Redis Replication Group
+  #     Engine: redis
+  #     CacheNodeType: !Ref RedisNodeType
+  #     NumNodeGroups: 2 # Number of shards (primary and replica)
+  #     CacheSubnetGroupName: !Ref RedisCacheSubnetGroup
+  #     CacheParameterGroupName: 'default.redis7.cluster.on'
+  #     EngineVersion: 7.0
+  #     AutomaticFailoverEnabled: true
+  #     TransitEncryptionEnabled: true # Enable encryption in transit
+  #     AtRestEncryptionEnabled: true # Enable encryption at rest
+  #     AutoMinorVersionUpgrade: true
+  #     KmsKeyId: !Ref RedisKMSKeyID
+  #     SecurityGroupIds:
+  #     - !Ref RedisSecurityGroup
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+  #       ## Log Delivery to cloudwatch for Redis Cluster
+  #     SnapshotWindow: '03:00-04:00'
+  #     SnapshotRetentionLimit: 7
+  #     LogDeliveryConfigurations:
+  #     - LogType: slow-log
+  #       DestinationType: cloudwatch-logs
+  #       LogFormat: json
+  #       DestinationDetails:
+  #         CloudWatchLogsDetails:
+  #           LogGroup: !Sub "/aws/elasticache/${AWS::StackName}/redis-slow-logs"
+  #     - LogType: engine-log
+  #       DestinationType: cloudwatch-logs
+  #       LogFormat: json # Specify the log format here (e.g., json or text)
+  #       DestinationDetails:
+  #         CloudWatchLogsDetails:
+  #           LogGroup: !Sub "/aws/elasticache/${AWS::StackName}/redis-engine-logs"
+  # RedisKMSAlias:
+  #   Type: 'AWS::KMS::Alias'
+  #   Properties:
+  #     AliasName: alias/redis-kms-key
+  #     TargetKeyId: !Ref RedisKMSKeyID
+  # RedisKMSKeyID:
+  #   Type: AWS::KMS::Key
+  #   Properties:
+  #     Description: KMS key for encryption and decryption
+  #     EnableKeyRotation: true
+  #     KeyPolicy:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #       - Sid: Enable IAM User Permissions
+  #         Effect: Allow
+  #         Principal:
+  #           AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+  #         Action: kms:*
+  #         Resource: "*"
+  #     EnableKeyRotation: true
+  #     Tags:
+  #     - Key: "Environment"
+  #       Value: !Ref Environment
+  # CloudWatchSlowLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/elasticache/${AWS::StackName}/redis-slow-logs"
+  #     RetentionInDays: 14
+  # CloudWatchEngineLogGroup:
+  #   Type: AWS::Logs::LogGroup
+  #   Properties:
+  #     LogGroupName: !Sub "/aws/elasticache/${AWS::StackName}/redis-engine-logs" # Log group for engine logs
+  #     RetentionInDays: 14
+  # ## Redis Security Group(Allowed only for EKS Cluster)
+  # RedisSecurityGroup:
+  #   Type: AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Security group for the Redis cluster
+  #     VpcId: !Ref VPCId
+  #     SecurityGroupIngress:
+  #     - IpProtocol: tcp
+  #       FromPort: 6379
+  #       ToPort: 6379
+  #       SourceSecurityGroupId: !Ref ClusterSecurityGroup
+  #     - IpProtocol: tcp
+  #       FromPort: 6379
+  #       ToPort: 6379
+  #       SourceSecurityGroupId: !Ref AuroraSecurityGroup
+  # ## Alarm for CPU Utilization of redis cluster.
+  # CPUUtilizationAlarm1:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-CPUUtilization-Alarm-node-1-warning
+  #     AlarmDescription: "Alarm for CPU utilization of the Redis replication group node 1"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "CPUUtilization"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0001-001'
+  #     - Name: "CacheNodeId"
+  #       Value: '0001'
+
+  #     Statistic: "Average"
+  #     Period: 300
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref WarningThreshold
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref CPUUtilizationAlarmTopic
+  #     TreatMissingData: "missing"
+  # CPUUtilizationCriticalAlarm1:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-CPUUtilization-Alarm-node-1-critical
+  #     AlarmDescription: "Alarm for CPU utilization of the Redis replication group node 1"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "CPUUtilization"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0001-001'
+  #     - Name: "CacheNodeId"
+  #       Value: '0001'
+
+  #     Statistic: "Average"
+  #     Period: 900
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref CriticalThreshold
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref CPUUtilizationAlarmTopic
+  #     TreatMissingData: "missing"
+  # CPUUtilizationAlarm2:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-CPUUtilization-Alarm-node-2-warning
+  #     AlarmDescription: "Alarm for CPU utilization warning of the Redis replication group node 2"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "CPUUtilization"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0002-001'
+  #     - Name: "CacheNodeId"
+  #       Value: '0001'
+
+  #     Statistic: "Average"
+  #     Period: 300
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref WarningThreshold
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref CPUUtilizationAlarmTopic
+  #     TreatMissingData: "missing"
+  # CPUUtilizationCriticalAlarm2:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-CPUUtilization-Alarm-node-2-critical
+  #     AlarmDescription: "Alarm for CPU critical utilization  of the Redis replication group node 2"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "CPUUtilization"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0002-001'
+  #     - Name: "CacheNodeId"
+  #       Value: '0001'
+
+  #     Statistic: "Average"
+  #     Period: 900 
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref CriticalThreshold
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref CPUUtilizationAlarmTopic
+  #     TreatMissingData: "missing"
+  # CPUUtilizationAlarmTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     DisplayName: "CPU Utilization Alarm Topic"
+  #     TopicName: "RedisCPUUtilizationAlarmTopic"
+  #     KmsMasterKeyId: !Ref SNSKMSKeyID
+  # CPUUtilizationAlarmSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: email
+  #     TopicArn: !Ref CPUUtilizationAlarmTopic
+  #     Endpoint: !Ref SNSEmailID
+  ## Alarm for memory usage for Redis Cluster
+  # DatabaseMemoryUsageAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-DatabaseMemoryUsage-Alarm-warning
+  #     AlarmDescription: "Alarm for database memory usage percentage warning of the Redis replication group"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: DatabaseMemoryUsagePercentage
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0001-001'
+  #     Statistic: "Average"
+  #     Period: 300
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref WarningThreshold
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref DatabaseMemoryUsageAlarmTopic
+  # DatabaseMemoryCriticalUsageAlarm:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-DatabaseMemoryUsage-Alarm-Critical
+  #     AlarmDescription: "Alarm for critical database memory usage percentage of the Redis replication group"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: DatabaseMemoryUsagePercentage
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0001-001'
+  #     Statistic: "Average"
+  #     Period: 900
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref CriticalThreshold 
+  #     ComparisonOperator: "GreaterThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref DatabaseMemoryUsageAlarmTopic
+  # DatabaseMemoryUsageAlarmTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     DisplayName: "Database Memory Usage Alarm Topic"
+  #     TopicName: "RedisDatabaseMemoryUsageAlarmTopic"
+  #     KmsMasterKeyId: !Ref SNSKMSKeyID
+  # DatabaseMemoryUsageAlarmSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: email
+  #     TopicArn: !Ref DatabaseMemoryUsageAlarmTopic
+  #     Endpoint: !Ref SNSEmailID
+  ## Alarm for Freeable memory for Redis Cluster
+  # FreeableMemoryAlarm1:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-FreeableMemory-Alarm-node1-warning
+  #     AlarmDescription: "Alarm for freeable memory of the Redis node 1"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "FreeableMemory"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0001-001'
+  #     Statistic: "Average"
+  #     Period: 300 # 5 minutes
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref RedisFreeableMemoryWarning
+  #     ComparisonOperator: "LessThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref FreeableMemoryAlarmTopic
+  #     TreatMissingData: "missing"
+  # FreeableMemoryCriticalAlarm1:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-FreeableMemory-Alarm-node1-critical
+  #     AlarmDescription: "Alarm for freeable memory of the Redis node 1"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "FreeableMemory"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0001-001'
+  #     Statistic: "Average"
+  #     Period: 900
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref RedisFreeableMemoryCritical 
+  #     ComparisonOperator: "LessThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref FreeableMemoryAlarmTopic
+  #     TreatMissingData: "missing"
+  # FreeableMemoryAlarm2:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-FreeableMemory-Alarm-node2-warning
+  #     AlarmDescription: "Alarm for freeable memory warning of the Redis node 2"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "FreeableMemory"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0002-001'
+  #     Statistic: "Average"
+  #     Period: 300 # 5 minutes
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref RedisFreeableMemoryWarning
+  #     ComparisonOperator: "LessThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref FreeableMemoryAlarmTopic
+  #     TreatMissingData: "missing"
+  # FreeableMemoryCriticalAlarm2:
+  #   Type: AWS::CloudWatch::Alarm
+  #   Properties:
+  #     AlarmName: Redis-Replication-Group-FreeableMemory-Alarm-node2-critical
+  #     AlarmDescription: "Alarm for critical freeable memory of the Redis node 2"
+  #     Namespace: "AWS/ElastiCache"
+  #     MetricName: "FreeableMemory"
+  #     Dimensions:
+  #     - Name: "CacheClusterId"
+  #       Value: !Sub '${RedisReplicationGroup}-0002-001'
+  #     Statistic: "Average"
+  #     Period: 900
+  #     EvaluationPeriods: 1
+  #     Threshold: !Ref RedisFreeableMemoryCritical 
+  #     ComparisonOperator: "LessThanOrEqualToThreshold"
+  #     AlarmActions:
+  #     - !Ref FreeableMemoryAlarmTopic
+  #     TreatMissingData: "missing"
+  # FreeableMemoryAlarmTopic:
+  #   Type: AWS::SNS::Topic
+  #   Properties:
+  #     DisplayName: "Freeable Memory Alarm Topic"
+  #     TopicName: "RedisFreeableMemoryAlarmTopic"
+  #     KmsMasterKeyId: !Ref SNSKMSKeyID
+  # FreeableMemoryAlarmSubscription:
+  #   Type: AWS::SNS::Subscription
+  #   Properties:
+  #     Protocol: email
+  #     TopicArn: !Ref FreeableMemoryAlarmTopic
+  #     Endpoint: !Ref SNSEmailID
+
+
+  ## Backup Plan for EFS 
+  EFSBackupPlan:
+    Type: "AWS::Backup::BackupPlan"
+    Properties:
+      BackupPlan:
+        BackupPlanName: "EFSBackupPlan"
+        BackupPlanRule:
+
+        - RuleName: "EFSDailyBackupRule"
+          TargetBackupVault: !Ref EFSTargetBackupVault
+          ScheduleExpression: "cron(0 3 ? * * *)" # Daily at midnight
+          ScheduleExpressionTimezone: Asia/Kuala_Lumpur
+          Lifecycle:
+            DeleteAfterDays: 35
+  EFSBackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref EFSBackupPlan
+      BackupSelection:
+        SelectionName: EFS-Backup-Selection
+        IamRoleArn: !GetAtt BackupRole.Arn
+        Resources:
+        - !Sub "arn:aws:elasticfilesystem:${AWS::Region}:${AWS::AccountId}:file-system/${FileSystem}"
+  ##  Backup vault for EFS
+  EFSTargetBackupVault:
+    Type: "AWS::Backup::BackupVault"
+    Properties:
+      BackupVaultName: "EFSBackupVault"
+      EncryptionKeyArn:
+        Fn::Join:
+        - ""
+        - - "arn:aws:kms:"
+          - !Ref "AWS::Region"
+          - ":"
+          - !Ref "AWS::AccountId"
+          - ":key/"
+          - !Ref BackupsKMSKeyID
+
+  ########################################################################################################
+  ## Backup Role for Performing Backups
+  BackupRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: IAM-Role-Backup
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: backup.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup"
+
+  ## Backup plan for Aurora postgres
+  AuroraBackupPlan:
+    Type: "AWS::Backup::BackupPlan"
+    Properties:
+      BackupPlan:
+        BackupPlanName: "AuroraBackupPlan"
+        BackupPlanRule:
+        - RuleName: "AuroraWeeklyBackupRule"
+          TargetBackupVault: !Ref AuroraTargetBackupVault
+          ScheduleExpression: "cron(0 3 ? * 1 *)" # Every Monday at midnight
+          ScheduleExpressionTimezone: Asia/Kuala_Lumpur
+          Lifecycle:
+            DeleteAfterDays: 28
+        - RuleName: "AuroraDailyBackupRule"
+          TargetBackupVault: !Ref AuroraTargetBackupVault
+          ScheduleExpression: "cron(0 3 ? * * *)" # Daily at midnight
+          ScheduleExpressionTimezone: Asia/Kuala_Lumpur
+          Lifecycle:
+            DeleteAfterDays: 14
+        - RuleName: "AuroraMonthlyBackupRule"
+          TargetBackupVault: !Ref AuroraTargetBackupVault
+          ScheduleExpression: "cron(0 3 1 * ? *)" # Monthly on the 1st day at midnight
+          ScheduleExpressionTimezone: Asia/Kuala_Lumpur
+          Lifecycle:
+            DeleteAfterDays: 365
+        - RuleName: "AuroraYearlyBackupRule"
+          TargetBackupVault: !Ref AuroraTargetBackupVault
+          ScheduleExpression: "cron(0 3 1 1 ? *)" # Yearly on the 1st day of January at midnight
+          ScheduleExpressionTimezone: Asia/Kuala_Lumpur
+          Lifecycle:
+            DeleteAfterDays: 2555
+  ## Backup vault for Aurora Postgres
+  AuroraTargetBackupVault:
+    Type: "AWS::Backup::BackupVault"
+    Properties:
+      BackupVaultName: "AuroraBackupVault1"
+      EncryptionKeyArn:
+        Fn::Join:
+        - ""
+        - - "arn:aws:kms:"
+          - !Ref "AWS::Region"
+          - ":"
+          - !Ref "AWS::AccountId"
+          - ":key/"
+          - !Ref BackupsKMSKeyID
+  AuroraBackupSelection:
+    Type: AWS::Backup::BackupSelection
+    Properties:
+      BackupPlanId: !Ref AuroraBackupPlan
+      BackupSelection:
+        SelectionName: Aurora-Backup-Selection
+        IamRoleArn: !GetAtt BackupRole.Arn
+        Resources:
+        - !Sub "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraCluster}"
+  ECRKMSAlias:
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: alias/ecr-kms-key
+      TargetKeyId: !Ref ECRKMSKey
+  ECRKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encryption and decryption
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: "*"
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+
+  PublisherECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: publisher
+      EncryptionConfiguration:
+        EncryptionType: KMS
+        KmsKey: !GetAtt ECRKMSKey.Arn
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Only keep 8 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 8
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  MarketDataECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: marketdata
+      EncryptionConfiguration:
+        EncryptionType: KMS
+        KmsKey: !GetAtt ECRKMSKey.Arn
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Only keep 8 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 8
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  DrupalECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: drupalcms
+      EncryptionConfiguration:
+        EncryptionType: KMS
+        KmsKey: !GetAtt ECRKMSKey.Arn
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Only keep 8 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 8
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+
+  UserMicroserviceECRRespository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref UserMicroserviceECRRepositoryName
+      EncryptionConfiguration:
+        EncryptionType: KMS
+        KmsKey: !GetAtt ECRKMSKey.Arn
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+            {
+              "rulePriority": 1,
+              "description": "Only keep 8 images",
+              "selection": {
+                "tagStatus": "any",
+                "countType": "imageCountMoreThan",
+                "countNumber": 8
+              },
+              "action": { "type": "expire" }
+            }]
+          }
+  UsermicroserviceKMSAlias:
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: alias/user-kms-key
+      TargetKeyId: !Ref UserMicroserviceKMSKeyID
+  UserMicroserviceKMSKeyID:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encryption and decryption of data in usermicroservice
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: "*"
+      Tags:
+      - Key: "Environment"
+        Value: !Ref Environment
+
+##############################################################################################################################
+
+
+## Keypoints:
+##  EKS-EFS Integration:
+##   - When EKS Cluster get created, By default one additional SecurityGroup gets created other than ClustersecurityGroup(i.e Created by CloudFormation Template), we have to add that Additional SecuirtyGroup to EFS Security group manually.
+##   - After adding that Secuirty group we will be able to mount the EFS to our Pods using PV and PVC.
+##  EKS-RDS Integration:
+##   - When EKS Cluster get created, By default one additional SecurityGroup gets created other than ClustersecurityGroup(i.e Created by CloudFormation Template), we have to add that Additional SecuirtyGroup to Aurora Security group manually.
+##   - After adding that Secuirty group we will be able to access the RDS.
